@@ -2,6 +2,20 @@ const puppeteer = require('puppeteer');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 const puppeteerExtra = require('puppeteer-extra');
 var Xvfb = require('xvfb');
+const fs = require('fs');
+
+// Function to read the cookies.js script
+const loadCookiesScript = () => {
+    return new Promise((resolve, reject) => {
+        fs.readFile('./cookies.js', 'utf8', (err, data) => {
+            if (err) {
+                reject(err);
+            } else {
+                resolve(data);
+            }
+        });
+    });
+};
 
 var xvfb = new Xvfb({
     silent: true,
@@ -10,6 +24,27 @@ var xvfb = new Xvfb({
 });
 // xvfb.startSync((err)=>{if (err) console.error(err)});
 
+// Function to scroll and load more content
+async function autoScroll(page) {
+    await page.evaluate(async () => {
+        await new Promise((resolve, reject) => {
+            var totalHeight = 0;
+            var distance = 100;
+            var timer = setInterval(() => {
+                var scrollHeight = document.body.scrollHeight;
+                window.scrollBy(0, distance);
+                totalHeight += distance;
+
+                if (totalHeight >= scrollHeight) {
+                    clearInterval(timer);
+
+                    resolve();
+                }
+            }, 100);
+        });
+    });
+}
+
 args = {
     args: [
         // enable FLoC
@@ -17,86 +52,72 @@ args = {
         '--disable-web-security',
         '--disable-features=IsolateOrigins,site-per-process',
         '--start-maximized',
+        // '--incognito',
         // '--display='+xvfb._display,
-        `--disable-extensions-except=./extn_src/adblock_v2,./extn_src/extension`,
-        `--load-extension=./extn_src/adblock_v2,./extn_src/extension`,
+	//`--disable-extensions-except=./extn_src/adblock_v2`,
+        //`--load-extension=./extn_src/adblock_v2`,
     ]
 };
-args.executablePath = '/tmp/chrome_97/chrome';
-// args.executablePath = '/usr/bin/google-chrome';
+// args.executablePath = '/tmp/chrome_97/chrome';
+args.executablePath = '/usr/bin/chromium-browser';
 args.headless = false;
 
 puppeteerExtra.default.use(StealthPlugin());
-puppeteerExtra.default.launch(args).then(async browser => {
-// puppeteer.launch(args).then(async browser => {
-    // const browser = await puppeteer.launch(args);
 
-    // Adblock
-    await new Promise(r => setTimeout(r, 10000));
+for (let i = 0; i < 1; i++){
+    puppeteerExtra.default.launch(args).then(async browser => {
+    // puppeteer.launch(args).then(async browser => {
+        // const browser = await puppeteer.launch(args);
 
-    const page = await browser.newPage();
-    page.setDefaultTimeout(60000);
+        // Adblock
+        
+        
+        await new Promise(r => setTimeout(r, 2000));
+        const context = await browser.createIncognitoBrowserContext();
+        await new Promise(r => setTimeout(r, 5000));
 
-    // Array of selectors to check
-    const selectors = ['[id^="google_ads_iframe"]', '[name^="google_ads_iframe"]', 'div[data-google-query-id]'];
+        const page = await context.newPage();
+        page.setDefaultTimeout(30000);
 
-    // URL to visit
-    const url1 = 'https://www.geeksforgeeks.org/deletion-in-linked-list/';
-    const url2 = 'https://stackoverflow.com/questions/67698176/error-loading-webview-error-could-not-register-service-workers-typeerror-fai'
+        // URL to visit
+        const url1 = 'https://www.geeksforgeeks.org/deletion-in-linked-list/';
+        const url2 = 'https://stackoverflow.com/questions/67698176/error-loading-webview-error-could-not-register-service-workers-typeerror-fai'
 
-    await page.goto(url1, { waitUntil: 'networkidle0' });
-    await new Promise(r => setTimeout(r, 5000));
+        try{    
+            await page.goto(url1, { waitUntil: 'networkidle2' });
+            await new Promise(r => setTimeout(r, 5000));
+        } catch(e){
+            console.error(`Nooooooooooo: ${e}`);
+            await browser.close();
+            return;
+        }
 
-    // Function to scroll and load more content
-    async function autoScroll(page) {
-        await page.evaluate(async () => {
-            await new Promise((resolve, reject) => {
-                var totalHeight = 0;
-                var distance = 100;
-                var timer = setInterval(() => {
-                    var scrollHeight = document.body.scrollHeight;
-                    window.scrollBy(0, distance);
-                    totalHeight += distance;
+        // Load and execute the cookies.js script
+        const cookiesScript = await loadCookiesScript();
+        const result = await page.evaluate(new Function(cookiesScript));
 
-                    if (totalHeight >= scrollHeight) {
-                        clearInterval(timer);
+        // Log the return value of the script
+        console.log('Button:', result.button);
+        console.log('Iframes:', result.iframes);
+        
+        // await autoScroll(page);
 
-                        resolve();
-                    }
-                }, 100);
-            });
+        console.error('\nREACHED HERE\n');
+
+        page.on('console', msg => {
+            for (let i = 0; i < msg.args().length; ++i)
+                console.error(`${i}: ${msg.args()[i]}`);
         });
-    }
 
 
-    await autoScroll(page);
+        await page.screenshot({
+            path: `screenshot_${i}.jpg`
+        });
 
-    console.error('\nREACHED HERE\n');
-
-    page.on('console', msg => {
-        for (let i = 0; i < msg.args().length; ++i)
-            console.error(`${i}: ${msg.args()[i]}`);
+        // await new Promise(r => setTimeout(r, 5000));
+        page.close()
+        await browser.close();
     });
-
-    let source = await page.content();
-    console.log(`PAGE_CONTENT: ${source}`);
-
-    // for (const selector of selectors) {
-    //     // console.error(`SELECTOR: ${selector}`);
-    //     const exists = await page.evaluate((selector) => {
-    //         return document.querySelector(selector) !== null;
-    //     }, selector);
-
-    //     if (exists) {
-    //         console.log(`Selector "${selector}" found on the page.`);
-    //     } else {
-    //         console.log(`Selector "${selector}" NOT found on the page.`);
-    //     }
-    // }
-
-    await new Promise(r => setTimeout(r, 100000));
-
-    await browser.close();
-});
+}
 xvfb.stopSync();
 
