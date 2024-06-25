@@ -36,6 +36,7 @@ return (() => {
       "Alle erlauben",
       "Alle zustimmen",
       "Alle akzeptieren",
+      "Zustimmung",
   
       // French
       "Accepter",
@@ -226,13 +227,14 @@ return (() => {
         if (gate) break;
       }
   
-      if (!gate) return { iframes: iframes, button: null };
+      if (!gate) return iframes;
   
       //get the accept button
   
       var button = _get_button_from_ancestors(gate);
+      button.click()
   
-      return { iframes: iframes, button: button };
+      return [];
     }
   
     return query_screen_gated();
